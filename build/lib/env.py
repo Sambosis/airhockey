@@ -347,7 +347,7 @@ class AirHockeyEnv:
         else:
             # Already separating; keep current velocity after positional fix
             pass
-        
+
         return True
 
     def _normalize_obs(self, mirror_for_right: bool) -> np.ndarray:

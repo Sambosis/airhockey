@@ -72,6 +72,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--puck-mass", type=float, dest="puck_mass", help="Puck mass (arbitrary units)")
     parser.add_argument("--mallet-radius", type=float, dest="mallet_radius", help="Mallet radius in pixels")
     parser.add_argument("--mallet-speed", type=float, dest="mallet_speed", help="Mallet max speed per tick (px)")
+    parser.add_argument("--mallets-per-side", type=int, dest="mallets_per_side", help="Number of mallets per player")
     parser.add_argument("--puck-speed-init", nargs=2, metavar=("MIN","MAX"), help="Initial puck speed range (px/tick)")
 
     # Episode and rewards
@@ -191,7 +192,7 @@ def main() -> None:
         # Default to 12 as per specification
         obs_dim = 12
 
-    action_space_n = 5  # As specified: stay, up, down, left, right
+    action_space_n = 5 ** getattr(config, "mallets_per_side", 1)
 
     # Build agents
     agent_kwargs = dict(
