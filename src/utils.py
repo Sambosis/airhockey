@@ -111,12 +111,10 @@ def compute_shaping(env: "AirHockeyEnv", for_left: bool) -> float:
     # Distance component (normalize by table diagonal)
     diag = float(np.hypot(env.width, env.height))
     if for_left:
-        dx = env.left_mallet.x - env.puck.x
-        dy = env.left_mallet.y - env.puck.y
+        dists = [np.hypot(m.x - env.puck.x, m.y - env.puck.y) for m in env.left_mallets]
     else:
-        dx = env.right_mallet.x - env.puck.x
-        dy = env.right_mallet.y - env.puck.y
-    dist_norm = float(np.hypot(dx, dy)) / (diag if diag > 0.0 else 1.0)
+        dists = [np.hypot(m.x - env.puck.x, m.y - env.puck.y) for m in env.right_mallets]
+    dist_norm = float(min(dists)) / (diag if diag > 0.0 else 1.0)
     dist_term = 0.001 * (-dist_norm)
 
     # Time penalty
