@@ -153,7 +153,57 @@ class Trainer:
         loss_count_right = 0
 
         last_info: Dict[str, Any] = {}
-        with record_pygame(f"videos/replay_hockey_{self.episode}.mp4", fps=60) as rec:
+        
+        # Only use recorder when visualizing
+        if visualize:
+            with record_pygame(f"videos/replay_hockey_{self.episode}.mp4", fps=60) as rec:
+                while not done:
+                    # Agents select actions (epsilon-greedy handled internally)
+                    a_left = self.agent_left.select_action(obs_left, training=True)
+                    a_right = self.agent_right.select_action(obs_right, training=True)
+
+                    # Environment step
+                    nobs_left, nobs_right, r_left, r_right, done, info = self.env.step(a_left, a_right)
+                    steps += 1
+                    self.total_env_steps += 1
+
+                    # Store transitions
+                    self.agent_left.remember(obs_left, a_left, r_left, nobs_left, done)
+                    self.agent_right.remember(obs_right, a_right, r_right, nobs_right, done)
+
+                    # Update agents (one gradient step each if enough samples)
+                    metrics_left = self.agent_left.update()
+                    metrics_right = self.agent_right.update()
+
+                    # Accumulate loss metrics
+                    if metrics_left["loss"] > 0.0:
+                        loss_sum_left += metrics_left["loss"]
+                        loss_count_left += 1
+                    if metrics_right["loss"] > 0.0:
+                        loss_sum_right += metrics_right["loss"]
+                        loss_count_right += 1
+
+                    # Accumulate rewards
+                    total_reward_left += r_left
+                    total_reward_right += r_right
+
+                    # Render if visualizing
+                    if visualize:
+                        state = info.get("state")
+                        if state is not None:
+                            self.renderer.draw(
+                                state,
+                                self.episode,
+                                self.agent_left.epsilon,
+                                self.agent_right.epsilon,
+                            )
+
+                    # Prepare next iteration
+                    obs_left = nobs_left
+                    obs_right = nobs_right
+                    last_info = info
+        else:
+            # Non-visual episode without recording
             while not done:
                 # Agents select actions (epsilon-greedy handled internally)
                 a_left = self.agent_left.select_action(obs_left, training=True)
@@ -168,47 +218,26 @@ class Trainer:
                 self.agent_left.remember(obs_left, a_left, r_left, nobs_left, done)
                 self.agent_right.remember(obs_right, a_right, r_right, nobs_right, done)
 
-                # Online update (one step per env tick if enough samples)
+                # Update agents (one gradient step each if enough samples)
                 metrics_left = self.agent_left.update()
                 metrics_right = self.agent_right.update()
 
-                # Accumulate losses if available
-                if metrics_left and "loss" in metrics_left:
-                    loss_sum_left += float(metrics_left["loss"])
+                # Accumulate loss metrics
+                if metrics_left["loss"] > 0.0:
+                    loss_sum_left += metrics_left["loss"]
                     loss_count_left += 1
-                if metrics_right and "loss" in metrics_right:
-                    loss_sum_right += float(metrics_right["loss"])
+                if metrics_right["loss"] > 0.0:
+                    loss_sum_right += metrics_right["loss"]
                     loss_count_right += 1
 
-                # Rewards accumulation
+                # Accumulate rewards
                 total_reward_left += r_left
                 total_reward_right += r_right
 
-                # Rendering (only on visualize episodes)
-                if visualize and "state" in info and isinstance(info["state"], GameState):
-                    try:
-                        self.renderer.draw(
-                            state=info["state"],
-                            episode_idx=self.episode,
-                            eps_left=float(getattr(self.agent_left, "epsilon", 0.0)),
-                            eps_right=float(getattr(self.agent_right, "epsilon", 0.0)),
-                        )
-                    except Exception as e:
-                        # Avoid crashing training due to renderer
-                        print(f"[Trainer] Renderer.draw() error: {e}")
-                        visualize = False  # Disable rendering for the rest of this episode
-
-                # Prepare next step
-                obs_left, obs_right = nobs_left, nobs_right
+                # Prepare next iteration
+                obs_left = nobs_left
+                obs_right = nobs_right
                 last_info = info
-
-                # Safety: prevent runaway loop if env misbehaves (shouldn't happen, env enforces max_steps)
-                if steps > self.env.max_steps + 5:
-                    print("[Trainer] Warning: exceeded expected max_steps; breaking out.")
-                    break
-
-                if done:
-                    break
 
         # Close renderer if we opened it for this episode
         if visualize:

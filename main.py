@@ -68,10 +68,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--height", type=int, help="Table height in pixels")
     parser.add_argument("--dt", type=float, help="Seconds per physics step (simulation dt)")
     parser.add_argument("--friction", type=float, help="Puck velocity friction multiplier (0,1]")
+    # Objects
     parser.add_argument("--puck-radius", type=float, dest="puck_radius", help="Puck radius in pixels")
     parser.add_argument("--puck-mass", type=float, dest="puck_mass", help="Puck mass (arbitrary units)")
     parser.add_argument("--mallet-radius", type=float, dest="mallet_radius", help="Mallet radius in pixels")
     parser.add_argument("--mallet-speed", type=float, dest="mallet_speed", help="Mallet max speed per tick (px)")
+    parser.add_argument("--num-mallets-per-side", type=int, dest="num_mallets_per_side", help="Number of mallets per side")
     parser.add_argument("--puck-speed-init", nargs=2, metavar=("MIN","MAX"), help="Initial puck speed range (px/tick)")
 
     # Episode and rewards
@@ -181,15 +183,13 @@ def main() -> None:
     # Build environment
     env = AirHockeyEnv(config)
 
-    
-
     # Peek at observation dimension by resetting once (trainer will reset again per episode)
     try:
         obs_left, obs_right = env.reset(seed=getattr(config, "seed", None))
         obs_dim = len(obs_left)
     except Exception:
-        # Default to 12 as per specification
-        obs_dim = 12
+        # Use the obs_dim from config which is dynamically calculated
+        obs_dim = config.obs_dim
 
     action_space_n = 5  # As specified: stay, up, down, left, right
 

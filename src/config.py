@@ -78,6 +78,7 @@ class Config:
     puck_mass: float = 1.0
     mallet_radius: float = 20.0
     mallet_speed: float = 12.0  # max step speed per tick (px)
+    num_mallets_per_side: int = 2  # number of mallets per side
 
     # Puck initial speed (randomized magnitude range, px per tick)
     puck_speed_init: Tuple[float, float] = (3.0, 6.0)
@@ -135,7 +136,7 @@ class Config:
 
     # Derived/advanced options (rarely changed)
     action_space_n: int = 5
-    obs_dim: int = 12
+    obs_dim: int = 12  # Will be recalculated in __post_init__ based on num_mallets_per_side
 
     # Internal: resolved device string (computed in __post_init__)
     _resolved_device: str = field(init=False, repr=False)
@@ -166,6 +167,13 @@ class Config:
             raise ValueError("puck_speed_init must be a valid (min, max) with 0 <= min <= max.")
         if not (0.05 <= self.goal_height_ratio <= 0.8):
             raise ValueError("goal_height_ratio must be in [0.05, 0.8] for reasonable gameplay.")
+        if self.num_mallets_per_side < 1:
+            raise ValueError("num_mallets_per_side must be >= 1.")
+
+        # Calculate observation dimension based on number of mallets
+        # obs = [puck_x, puck_y, puck_vx, puck_vy] + 
+        #       [mallet_x, mallet_y, mallet_vx, mallet_vy] * (num_mallets_per_side * 2)
+        self.obs_dim = 4 + 4 * self.num_mallets_per_side * 2
 
         # Keep velocity normalization consistent with configured limits
         self.vel_norm_mallet = float(self.mallet_speed)

@@ -149,37 +149,36 @@ class Renderer:
             self.screen, self.colors["puck"], (int(puck.x), int(puck.y)), int(puck.r)
         )
 
-        # Draw mallets with shadows
-        left = state.left
-        right = state.right
+        # Draw all mallets with shadows
+        # Left mallets
+        for mallet in state.left_mallets:
+            pygame.draw.circle(
+                self.screen,
+                self.colors["shadow"],
+                (int(mallet.x) + shadow_offset, int(mallet.y) + shadow_offset),
+                int(mallet.r),
+            )
+            pygame.draw.circle(
+                self.screen,
+                self.colors["left_mallet"],
+                (int(mallet.x), int(mallet.y)),
+                int(mallet.r),
+            )
 
-        # Left mallet
-        pygame.draw.circle(
-            self.screen,
-            self.colors["shadow"],
-            (int(left.x) + shadow_offset, int(left.y) + shadow_offset),
-            int(left.r),
-        )
-        pygame.draw.circle(
-            self.screen,
-            self.colors["left_mallet"],
-            (int(left.x), int(left.y)),
-            int(left.r),
-        )
-
-        # Right mallet
-        pygame.draw.circle(
-            self.screen,
-            self.colors["shadow"],
-            (int(right.x) + shadow_offset, int(right.y) + shadow_offset),
-            int(right.r),
-        )
-        pygame.draw.circle(
-            self.screen,
-            self.colors["right_mallet"],
-            (int(right.x), int(right.y)),
-            int(right.r),
-        )
+        # Right mallets
+        for mallet in state.right_mallets:
+            pygame.draw.circle(
+                self.screen,
+                self.colors["shadow"],
+                (int(mallet.x) + shadow_offset, int(mallet.y) + shadow_offset),
+                int(mallet.r),
+            )
+            pygame.draw.circle(
+                self.screen,
+                self.colors["right_mallet"],
+                (int(mallet.x), int(mallet.y)),
+                int(mallet.r),
+            )
 
         # HUD: Scores, Episode, Epsilons, Step
         hud_margin = 8
