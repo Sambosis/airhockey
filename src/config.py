@@ -71,7 +71,7 @@ class Config:
 
     # Simulation/physics
     dt: float = 1.0 / 60.0
-    friction: float = 0.995  # multiplicative velocity decay each step
+    friction: float = 0.997  # multiplicative velocity decay each step
 
     # Objects
     puck_radius: float = 10.0
@@ -95,7 +95,7 @@ class Config:
     reward_time_penalty: float = -0.006
     reward_toward_opponent: float = 0.002
     reward_distance_weight: float = 0.002  # applied to negative distance
-    reward_on_hit: float = 2.0  # reward for hitting the puck
+    reward_on_hit: float = 8.0  # reward for hitting the puck
 
     # Observation normalization
     # Positions typically scaled to [-1, 1] using table size directly.
