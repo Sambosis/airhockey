@@ -150,36 +150,56 @@ class Renderer:
         )
 
         # Draw mallets with shadows
-        left = state.left
-        right = state.right
+        left_mallets = state.left
+        right_mallets = state.right
 
-        # Left mallet
-        pygame.draw.circle(
-            self.screen,
-            self.colors["shadow"],
-            (int(left.x) + shadow_offset, int(left.y) + shadow_offset),
-            int(left.r),
-        )
-        pygame.draw.circle(
-            self.screen,
-            self.colors["left_mallet"],
-            (int(left.x), int(left.y)),
-            int(left.r),
-        )
+        # Left mallets - use different shades of blue for multiple mallets
+        for i, mallet in enumerate(left_mallets):
+            # Vary the blue color intensity for different mallets
+            base_color = self.colors["left_mallet"]
+            if len(left_mallets) > 1:
+                # Create variations of the base color
+                intensity = 0.6 + 0.4 * i / max(1, len(left_mallets) - 1)
+                color = tuple(int(c * intensity) for c in base_color)
+            else:
+                color = base_color
+                
+            pygame.draw.circle(
+                self.screen,
+                self.colors["shadow"],
+                (int(mallet.x) + shadow_offset, int(mallet.y) + shadow_offset),
+                int(mallet.r),
+            )
+            pygame.draw.circle(
+                self.screen,
+                color,
+                (int(mallet.x), int(mallet.y)),
+                int(mallet.r),
+            )
 
-        # Right mallet
-        pygame.draw.circle(
-            self.screen,
-            self.colors["shadow"],
-            (int(right.x) + shadow_offset, int(right.y) + shadow_offset),
-            int(right.r),
-        )
-        pygame.draw.circle(
-            self.screen,
-            self.colors["right_mallet"],
-            (int(right.x), int(right.y)),
-            int(right.r),
-        )
+        # Right mallets - use different shades of red for multiple mallets
+        for i, mallet in enumerate(right_mallets):
+            # Vary the red color intensity for different mallets
+            base_color = self.colors["right_mallet"]
+            if len(right_mallets) > 1:
+                # Create variations of the base color
+                intensity = 0.6 + 0.4 * i / max(1, len(right_mallets) - 1)
+                color = tuple(int(c * intensity) for c in base_color)
+            else:
+                color = base_color
+                
+            pygame.draw.circle(
+                self.screen,
+                self.colors["shadow"],
+                (int(mallet.x) + shadow_offset, int(mallet.y) + shadow_offset),
+                int(mallet.r),
+            )
+            pygame.draw.circle(
+                self.screen,
+                color,
+                (int(mallet.x), int(mallet.y)),
+                int(mallet.r),
+            )
 
         # HUD: Scores, Episode, Epsilons, Step
         hud_margin = 8
