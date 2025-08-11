@@ -78,6 +78,7 @@ class Config:
     puck_mass: float = 1.0
     mallet_radius: float = 20.0
     mallet_speed: float = 12.0  # max step speed per tick (px)
+    mallets_per_side: int = 1  # number of controllable mallets per player side
 
     # Puck initial speed (randomized magnitude range, px per tick)
     puck_speed_init: Tuple[float, float] = (3.0, 6.0)
@@ -166,6 +167,8 @@ class Config:
             raise ValueError("puck_speed_init must be a valid (min, max) with 0 <= min <= max.")
         if not (0.05 <= self.goal_height_ratio <= 0.8):
             raise ValueError("goal_height_ratio must be in [0.05, 0.8] for reasonable gameplay.")
+        if int(self.mallets_per_side) <= 0:
+            raise ValueError("mallets_per_side must be >= 1")
 
         # Keep velocity normalization consistent with configured limits
         self.vel_norm_mallet = float(self.mallet_speed)

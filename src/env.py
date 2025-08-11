@@ -42,8 +42,8 @@ class Mallet:
 @dataclass
 class GameState:
     puck: Puck
-    left: Mallet
-    right: Mallet
+    left: List[Mallet]
+    right: List[Mallet]
     step_count: int
     score_left: int
     score_right: int
@@ -56,7 +56,7 @@ class AirHockeyEnv:
 
     - Top-down table with elastic collisions against top/bottom walls.
     - Left/Right edges have goal slots (openings) centered vertically; elsewhere the side walls are solid.
-    - Two mallets, discrete actions, constrained to their half of the table.
+    - Multiple mallets per side, discrete actions, constrained to their half of the table.
     - Puck has slight friction per tick.
     - Observations normalized to [-1, 1].
     - Right agent observation is mirrored horizontally to preserve symmetry.
@@ -69,26 +69,12 @@ class AirHockeyEnv:
         self.max_steps = int(config.max_steps)
         self.friction = float(config.friction)
         self.mallet_speed = float(config.mallet_speed)
+        self.mallets_per_side = int(getattr(config, "mallets_per_side", 1))
 
         self.puck = Puck(self.width / 2, self.height / 2, 0.0, 0.0, r=config.puck_radius, mass=config.puck_mass)
-        self.left_mallet = Mallet(
-            self.width * 0.25,
-            self.height / 2,
-            0.0,
-            0.0,
-            r=config.mallet_radius,
-            side="left",
-            max_speed=self.mallet_speed,
-        )
-        self.right_mallet = Mallet(
-            self.width * 0.75,
-            self.height / 2,
-            0.0,
-            0.0,
-            r=config.mallet_radius,
-            side="right",
-            max_speed=self.mallet_speed,
-        )
+        # Initialize mallet sets
+        self.left_mallets: List[Mallet] = self._spawn_side(side="left")
+        self.right_mallets: List[Mallet] = self._spawn_side(side="right")
 
         self.rng: np.random.Generator = np.random.default_rng(config.seed)
         self.step_count: int = 0
@@ -101,6 +87,9 @@ class AirHockeyEnv:
 
         # Goal opening size as a fraction of table height
         self.goal_height_ratio = config.goal_height_ratio
+
+        # Derived action space size (cartesian product of individual mallet actions)
+        self.action_space_n: int = len(ACTIONS) ** self.mallets_per_side
 
     # Public API
 
@@ -116,16 +105,9 @@ class AirHockeyEnv:
             self.rng = np.random.default_rng(seed)
 
         self.step_count = 0
-        # Reset mallets to quarters
-        self.left_mallet.x = self.width * 0.25
-        self.left_mallet.y = self.height * 0.5
-        self.left_mallet.vx = 0.0
-        self.left_mallet.vy = 0.0
-
-        self.right_mallet.x = self.width * 0.75
-        self.right_mallet.y = self.height * 0.5
-        self.right_mallet.vx = 0.0
-        self.right_mallet.vy = 0.0
+        # Reset mallets to side-appropriate positions
+        self.left_mallets = self._spawn_side(side="left")
+        self.right_mallets = self._spawn_side(side="right")
 
         # Puck to center with randomized initial velocity
         self.puck.x = self.width * 0.5
@@ -143,8 +125,8 @@ class AirHockeyEnv:
         Advance the simulation by one tick.
 
         Args:
-            a_left: Discrete action for left agent.
-            a_right: Discrete action for right agent.
+            a_left: Discrete action for left agent (encoded for all mallets on the side).
+            a_right: Discrete action for right agent (encoded for all mallets on the side).
 
         Returns:
             obs_left, obs_right: Observations for both agents (right is mirrored).
@@ -154,15 +136,15 @@ class AirHockeyEnv:
         """
         self.step_count += 1
 
-        # Apply mallet actions -> set velocities and positions (constrained)
-        self._apply_mallet_action(self.left_mallet, a_left)
-        self._apply_mallet_action(self.right_mallet, a_right)
+        # Apply mallet actions for each mallet on both sides
+        self._apply_side_actions(self.left_mallets, a_left)
+        self._apply_side_actions(self.right_mallets, a_right)
 
         # Physics: move puck, handle wall + mallet collisions, friction
-        goal_scored, left_hit, right_hit = self._physics_step()
+        goal_scored, left_hit_any, right_hit_any = self._physics_step()
 
         # Compute rewards
-        r_left, r_right = self._compute_rewards(goal_scored, left_hit, right_hit)
+        r_left, r_right = self._compute_rewards(goal_scored, left_hit_any, right_hit_any)
 
         done = False
         if goal_scored is not None:
@@ -189,6 +171,21 @@ class AirHockeyEnv:
         return obs_left, obs_right, r_left, r_right, done, info
 
     # Physics and helpers
+
+    def _apply_side_actions(self, mallets: List[Mallet], action_encoded: int) -> None:
+        """Decode the side action into per-mallet discrete moves and apply them in order."""
+        base = len(ACTIONS)
+        if action_encoded < 0 or action_encoded >= base ** len(mallets):
+            raise ValueError(f"Invalid side action {action_encoded} for {len(mallets)} mallets")
+        # Decode into digits in base `base`
+        actions: List[int] = []
+        a = action_encoded
+        for _ in range(len(mallets)):
+            actions.append(a % base)
+            a //= base
+        # Apply actions in fixed order
+        for mallet, act in zip(mallets, actions):
+            self._apply_mallet_action(mallet, int(act))
 
     def _apply_mallet_action(self, mallet: Mallet, action: int) -> None:
         """Apply discrete action to mallet with clamping to allowed region; set vx,vy accordingly."""
@@ -228,8 +225,8 @@ class AirHockeyEnv:
 
         Returns:
             goal_scored: "left" if left player scored, "right" if right player scored, else None.
-            left_hit: True if the left mallet hit the puck.
-            right_hit: True if the right mallet hit the puck.
+            left_hit_any: True if any left mallet hit the puck.
+            right_hit_any: True if any right mallet hit the puck.
         """
         # Integrate puck
         self.puck.x += self.puck.vx
@@ -269,14 +266,14 @@ class AirHockeyEnv:
                 self.puck.vx = -self.puck.vx
 
         # Mallet collisions
-        left_hit = self._handle_collisions(self.left_mallet)
-        right_hit = self._handle_collisions(self.right_mallet)
+        left_hit_any = any(self._handle_collisions(m) for m in self.left_mallets)
+        right_hit_any = any(self._handle_collisions(m) for m in self.right_mallets)
 
         # Apply friction to puck velocity
         self.puck.vx *= self.friction
         self.puck.vy *= self.friction
 
-        return None, left_hit, right_hit
+        return None, left_hit_any, right_hit_any
 
     def _handle_collisions(self, mallet: Mallet) -> bool:
         """Handle elastic collision between mallet (moving) and puck (circle-circle). Returns True if a collision occurred."""
@@ -324,35 +321,14 @@ class AirHockeyEnv:
     def _normalize_obs(self, mirror_for_right: bool) -> np.ndarray:
         """
         Build normalized observation vector.
-        Layout: [puck_x, puck_y, puck_vx, puck_vy,
-                 p1_x, p1_y, p1_vx, p1_vy,
-                 p2_x, p2_y, p2_vx, p2_vy]
+        Layout (for perspective player):
+          [puck_x, puck_y, puck_vx, puck_vy,
+           my_mallets (x,y,vx,vy) repeated,
+           opp_mallets (x,y,vx,vy) repeated]
 
-        - For left agent (mirror_for_right=False): p1=left mallet, p2=right mallet.
-        - For right agent (mirror_for_right=True): observation is horizontally mirrored and
-          mallets are swapped so that p1 corresponds to the right agent's mallet.
+        - For left agent (mirror_for_right=False): "my" = left mallets, "opp" = right mallets.
+        - For right agent (mirror_for_right=True): mirror horizontally and swap sides so "my" corresponds to right mallets.
         """
-        if not mirror_for_right:
-            puck = (self.puck.x, self.puck.y, self.puck.vx, self.puck.vy)
-            m1 = (self.left_mallet.x, self.left_mallet.y, self.left_mallet.vx, self.left_mallet.vy)
-            m2 = (self.right_mallet.x, self.right_mallet.y, self.right_mallet.vx, self.right_mallet.vy)
-        else:
-            # Mirror horizontally: x' = width - x, vx' = -vx
-            puck = (self.width - self.puck.x, self.puck.y, -self.puck.vx, self.puck.vy)
-            # Swap mallets so p1 corresponds to the right agent (mirrored to left side)
-            m1 = (
-                self.width - self.right_mallet.x,
-                self.right_mallet.y,
-                -self.right_mallet.vx,
-                self.right_mallet.vy,
-            )
-            m2 = (
-                self.width - self.left_mallet.x,
-                self.left_mallet.y,
-                -self.left_mallet.vx,
-                self.left_mallet.vy,
-            )
-
         def norm_pos_x(x: float) -> float:
             return float(np.clip(2.0 * x / self.width - 1.0, -1.0, 1.0))
 
@@ -366,24 +342,35 @@ class AirHockeyEnv:
             denom = max(1e-6, self._mallet_vel_norm)
             return float(np.clip(v / denom, -1.0, 1.0))
 
-        obs = np.array(
-            [
-                norm_pos_x(puck[0]),
-                norm_pos_y(puck[1]),
-                norm_v_puck(puck[2]),
-                norm_v_puck(puck[3]),
-                norm_pos_x(m1[0]),
-                norm_pos_y(m1[1]),
-                norm_v_mallet(m1[2]),
-                norm_v_mallet(m1[3]),
-                norm_pos_x(m2[0]),
-                norm_pos_y(m2[1]),
-                norm_v_mallet(m2[2]),
-                norm_v_mallet(m2[3]),
-            ],
-            dtype=np.float32,
-        )
-        return obs
+        if not mirror_for_right:
+            puck = (self.puck.x, self.puck.y, self.puck.vx, self.puck.vy)
+            my = [(m.x, m.y, m.vx, m.vy) for m in self.left_mallets]
+            opp = [(m.x, m.y, m.vx, m.vy) for m in self.right_mallets]
+        else:
+            # Mirror horizontally: x' = width - x, vx' = -vx
+            puck = (self.width - self.puck.x, self.puck.y, -self.puck.vx, self.puck.vy)
+            # Right mallets become "my" after mirror
+            my = [
+                (self.width - m.x, m.y, -m.vx, m.vy)
+                for m in self.right_mallets
+            ]
+            opp = [
+                (self.width - m.x, m.y, -m.vx, m.vy)
+                for m in self.left_mallets
+            ]
+
+        obs_list: List[float] = [
+            norm_pos_x(puck[0]),
+            norm_pos_y(puck[1]),
+            norm_v_puck(puck[2]),
+            norm_v_puck(puck[3]),
+        ]
+        for m in my:
+            obs_list.extend([norm_pos_x(m[0]), norm_pos_y(m[1]), norm_v_mallet(m[2]), norm_v_mallet(m[3])])
+        for m in opp:
+            obs_list.extend([norm_pos_x(m[0]), norm_pos_y(m[1]), norm_v_mallet(m[2]), norm_v_mallet(m[3])])
+
+        return np.array(obs_list, dtype=np.float32)
 
     def _compute_rewards(self, goal_scored: Optional[str], left_hit: bool, right_hit: bool) -> Tuple[float, float]:
         """
@@ -397,10 +384,10 @@ class AirHockeyEnv:
         dir_left = self.config.reward_toward_opponent if self.puck.vx > 0.0 else 0.0
         dir_right = self.config.reward_toward_opponent if self.puck.vx < 0.0 else 0.0
 
-        # Distance component (normalize by table diagonal)
+        # Distance component (use nearest mallet to the puck on each side)
         diag = math.hypot(self.width, self.height)
-        dl = math.hypot(self.left_mallet.x - self.puck.x, self.left_mallet.y - self.puck.y) / diag
-        dr = math.hypot(self.right_mallet.x - self.puck.x, self.right_mallet.y - self.puck.y) / diag
+        dl = min(math.hypot(m.x - self.puck.x, m.y - self.puck.y) for m in self.left_mallets) / diag
+        dr = min(math.hypot(m.x - self.puck.x, m.y - self.puck.y) for m in self.right_mallets) / diag
         dist_left = self.config.reward_distance_weight * (-dl)
         dist_right = self.config.reward_distance_weight * (-dr)
 
@@ -437,33 +424,49 @@ class AirHockeyEnv:
     def _snapshot_state(self) -> GameState:
         """Create an immutable snapshot GameState for rendering/logging."""
         puck = Puck(self.puck.x, self.puck.y, self.puck.vx, self.puck.vy, r=self.puck.r, mass=self.puck.mass)
-        left = Mallet(
-            self.left_mallet.x,
-            self.left_mallet.y,
-            self.left_mallet.vx,
-            self.left_mallet.vy,
-            r=self.left_mallet.r,
-            side=self.left_mallet.side,
-            max_speed=self.left_mallet.max_speed,
-        )
-        right = Mallet(
-            self.right_mallet.x,
-            self.right_mallet.y,
-            self.right_mallet.vx,
-            self.right_mallet.vy,
-            r=self.right_mallet.r,
-            side=self.right_mallet.side,
-            max_speed=self.right_mallet.max_speed,
-        )
+        left_list = [
+            Mallet(m.x, m.y, m.vx, m.vy, r=m.r, side=m.side, max_speed=m.max_speed)
+            for m in self.left_mallets
+        ]
+        right_list = [
+            Mallet(m.x, m.y, m.vx, m.vy, r=m.r, side=m.side, max_speed=m.max_speed)
+            for m in self.right_mallets
+        ]
         return GameState(
             puck=puck,
-            left=left,
-            right=right,
+            left=left_list,
+            right=right_list,
             step_count=self.step_count,
             score_left=self.score_left,
             score_right=self.score_right,
             goal_height_ratio=self.goal_height_ratio,
         )
+
+    def _spawn_side(self, side: str) -> List[Mallet]:
+        """Create mallets for a given side with sensible initial spacing."""
+        assert side in ("left", "right")
+        x_pos = self.width * (0.25 if side == "left" else 0.75)
+        # Evenly space vertically around center
+        count = self.mallets_per_side
+        # Compute vertical offsets centered at mid-height
+        center_y = self.height * 0.5
+        spacing = max(self.config.mallet_radius * 2.5, self.height / (count + 1)) if count > 1 else 0.0
+        start_y = center_y - spacing * (count - 1) / 2.0
+        mallets: List[Mallet] = []
+        for i in range(count):
+            y = start_y + i * spacing
+            mallets.append(
+                Mallet(
+                    x_pos,
+                    y,
+                    0.0,
+                    0.0,
+                    r=self.config.mallet_radius,
+                    side=side,
+                    max_speed=self.mallet_speed,
+                )
+            )
+        return mallets
 
 
 __all__ = ["ACTIONS", "AirHockeyEnv", "GameState", "Puck", "Mallet"]

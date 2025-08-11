@@ -108,15 +108,19 @@ def compute_shaping(env: "AirHockeyEnv", for_left: bool) -> float:
     # Direction component
     dir_term = 0.01 if (env.puck.vx > 0.0 if for_left else env.puck.vx < 0.0) else 0.0
 
-    # Distance component (normalize by table diagonal)
-    diag = float(np.hypot(env.width, env.height))
+    # Distance component (normalize by table diagonal) using nearest mallet on that side
+    diag = float(np.hypot(env.width, env.height)) or 1.0
     if for_left:
-        dx = env.left_mallet.x - env.puck.x
-        dy = env.left_mallet.y - env.puck.y
+        mallets = getattr(env, "left_mallets", [])
     else:
-        dx = env.right_mallet.x - env.puck.x
-        dy = env.right_mallet.y - env.puck.y
-    dist_norm = float(np.hypot(dx, dy)) / (diag if diag > 0.0 else 1.0)
+        mallets = getattr(env, "right_mallets", [])
+    if mallets:
+        dmin = min(np.hypot(m.x - env.puck.x, m.y - env.puck.y) for m in mallets)
+    else:
+        # Fallback for legacy single-mallet attributes if lists are absent
+        m = getattr(env, "left_mallet" if for_left else "right_mallet", None)
+        dmin = float(np.hypot(m.x - env.puck.x, m.y - env.puck.y)) if m is not None else 0.0
+    dist_norm = float(dmin) / diag
     dist_term = 0.001 * (-dist_norm)
 
     # Time penalty

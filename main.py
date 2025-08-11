@@ -73,6 +73,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--mallet-radius", type=float, dest="mallet_radius", help="Mallet radius in pixels")
     parser.add_argument("--mallet-speed", type=float, dest="mallet_speed", help="Mallet max speed per tick (px)")
     parser.add_argument("--puck-speed-init", nargs=2, metavar=("MIN","MAX"), help="Initial puck speed range (px/tick)")
+    parser.add_argument("--mallets-per-side", type=int, dest="mallets_per_side", help="Number of mallets per player side")
 
     # Episode and rewards
     parser.add_argument("--max-steps", type=int, dest="max_steps", help="Max steps per episode")
@@ -139,6 +140,8 @@ def _collect_overrides(ns: argparse.Namespace) -> Dict[str, Any]:
                 with suppress(Exception):
                     overrides[k] = (float(v[0]), float(v[1]))
             continue
+        if k == "mallets_per_side":
+            overrides[k] = int(v)
         if k in config_field_names:
             overrides[k] = v
     return overrides
@@ -191,7 +194,8 @@ def main() -> None:
         # Default to 12 as per specification
         obs_dim = 12
 
-    action_space_n = 5  # As specified: stay, up, down, left, right
+    # Derive action space from env (supports multiple mallets per side)
+    action_space_n = int(getattr(env, "action_space_n", 5))
 
     # Build agents
     agent_kwargs = dict(
