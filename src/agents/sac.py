@@ -217,8 +217,9 @@ class SACAgent(BaseAgent):
         self.alpha = self.log_alpha.exp().item()
 
         # Soft update target networks
-        for target_param, param in zip(self.critic_target.parameters(), self.critic.parameters()):
-            target_param.data.copy_(self.tau * param.data + (1.0 - self.tau) * target_param.data)
+        with torch.no_grad():
+            for target_param, param in zip(self.critic_target.parameters(), self.critic.parameters()):
+                target_param.data.copy_(self.tau * param.data + (1.0 - self.tau) * target_param.data)
 
         self.gradient_steps += 1
 
