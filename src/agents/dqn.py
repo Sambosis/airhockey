@@ -1,53 +1,103 @@
-import os
-from typing import Any, Dict, Optional
-
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-
-from src.replay_buffer import ReplayBuffer
-from src.utils import epsilon_by_frame
-from src.config import Config
-
-
-__all__ = ["QNetwork", "DQNAgent"]
-
-
-class QNetwork(nn.Module):
-    """
-    Simple MLP approximating Q-values for a discrete action space.
-
-    Architecture:
-    - Input: obs_dim
-    - Hidden layers: 256, 256 with ReLU
-    - Output: action_space_n (Q-value for each action)
-    """
-
-    def __init__(self, obs_dim: int, action_space_n: int):
-        super().__init__()
-        self.obs_dim = obs_dim
-        self.action_space_n = action_space_n
-
-        self.net = nn.Sequential(
-            nn.Linear(obs_dim, 256),
-            nn.ReLU(inplace=True),
-            nn.Linear(256, 256),
-            nn.ReLU(inplace=True),
-            nn.Linear(256, action_space_n),
-        )
-
-        # Initialize weights
-        for m in self.net:
-            if isinstance(m, nn.Linear):
-                nn.init.kaiming_uniform_(m.weight, nonlinearity="relu")
-                nn.init.zeros_(m.bias)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
-
-
+import os
+
+from typing import Any, Dict, Optional
+
+
+
+import numpy as np
+
+import torch
+
+import torch.nn as nn
+
+import torch.nn.functional as F
+
+import torch.optim as optim
+
+
+
+from src.replay_buffer import ReplayBuffer
+
+from src.utils import epsilon_by_frame
+
+from src.config import Config
+
+
+
+
+
+__all__ = ["QNetwork", "DQNAgent"]
+
+
+
+
+
+class QNetwork(nn.Module):
+
+    """
+
+    Simple MLP approximating Q-values for a discrete action space.
+
+
+
+    Architecture:
+
+    - Input: obs_dim
+
+    - Hidden layers: 512, 512 with ReLU
+
+    - Output: action_space_n (Q-value for each action)
+
+    """
+
+
+
+    def __init__(self, obs_dim: int, action_space_n: int):
+
+        super().__init__()
+
+        self.obs_dim = obs_dim
+
+        self.action_space_n = action_space_n
+
+
+
+        self.net = nn.Sequential(
+
+            nn.Linear(obs_dim, 512),
+
+            nn.ReLU(inplace=True),
+
+            nn.Linear(512, 512),
+
+            nn.ReLU(inplace=True),
+
+            nn.Linear(512, action_space_n),
+
+        )
+
+
+
+        # Initialize weights
+
+        for m in self.net:
+
+            if isinstance(m, nn.Linear):
+
+                nn.init.kaiming_uniform_(m.weight, nonlinearity="relu")
+
+                nn.init.zeros_(m.bias)
+
+
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+
+        return self.net(x)
+
+
+
+
+
 class DQNAgent:
     """
     Double DQN agent with a target network, replay buffer, and epsilon-greedy policy.

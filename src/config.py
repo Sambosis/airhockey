@@ -110,7 +110,7 @@ class Config:
     batch_size: int = 128
     buffer_capacity: int = 100_000
     learn_start: int = 5_000  # steps before learning starts
-    target_sync: int = 1_000  # gradient steps between target updates
+    target_sync: int = 10_000  # gradient steps between target updates
 
     # Epsilon-greedy exploration
     eps_start: float = 1.0

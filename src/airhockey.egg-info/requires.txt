@@ -1,0 +1,6 @@
+imageio[ffmpeg]>=2.37.0
+numpy<2.3,>=2.2.0
+pygame>=2.6.1
+torch>=2.8.0
+rich>=13.7.1
+numba>=0.61.2
