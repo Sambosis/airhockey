@@ -17,6 +17,7 @@ except Exception:  # pragma: no cover - torch should be available in the environ
 from src.config import Config
 from src.env import AirHockeyEnv
 from src.agents.dqn import DQNAgent
+from src.agents.sac import SACAgent
 from src.render import Renderer
 from src.train import Trainer
 from src.utils import seed_everything, load_checkpoint
@@ -88,6 +89,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     # Observation
     parser.add_argument("--vel-norm-puck", type=float, dest="vel_norm_puck", help="Normalization constant for puck velocities")
     parser.add_argument("--mirror-right-obs", action=argparse.BooleanOptionalAction, dest="mirror_right_obs", help="Mirror observations for right agent")
+
+    # Agent Selection
+    parser.add_argument("--agent-type", type=str, choices=["dqn", "sac"], help="Type of RL agent to use ('dqn' or 'sac')")
 
     # DQN / RL hyperparameters
     parser.add_argument("--lr", type=float, help="Learning rate")
@@ -195,28 +199,42 @@ def main() -> None:
     action_space_n = config.action_space_n  # Dynamic based on mallets_per_side
 
     # Build agents
-    agent_kwargs = dict(
-        obs_dim=obs_dim,
-        action_space_n=action_space_n,
-        lr=getattr(config, "lr", 1e-4),
-        gamma=getattr(config, "gamma", 0.99),
-        batch_size=getattr(config, "batch_size", 128),
-        buffer_capacity=getattr(config, "buffer_capacity", 100_000),
-        learn_start=getattr(config, "learn_start", 5_000),
-        target_sync=getattr(config, "target_sync", 1_000),
-        eps_start=getattr(config, "eps_start", 1.0),
-        eps_end=getattr(config, "eps_end", 0.05),
-        eps_decay_frames=getattr(config, "eps_decay_frames", 100_000),
-        device=device_str,
-    )
-
-    try:
+    if config.agent_type == "dqn":
+        agent_kwargs = dict(
+            obs_dim=obs_dim,
+            action_space_n=action_space_n,
+            lr=getattr(config, "lr", 1e-4),
+            gamma=getattr(config, "gamma", 0.99),
+            batch_size=getattr(config, "batch_size", 128),
+            buffer_capacity=getattr(config, "buffer_capacity", 100_000),
+            learn_start=getattr(config, "learn_start", 5_000),
+            target_sync=getattr(config, "target_sync", 1_000),
+            eps_start=getattr(config, "eps_start", 1.0),
+            eps_end=getattr(config, "eps_end", 0.05),
+            eps_decay_frames=getattr(config, "eps_decay_frames", 100_000),
+            device=device_str,
+        )
         agent_left = DQNAgent(**agent_kwargs)
         agent_right = DQNAgent(**agent_kwargs)
-    except TypeError:
-        # Fallback to minimal constructor if the above signature doesn't match
-        agent_left = DQNAgent(obs_dim=obs_dim, action_space_n=action_space_n, device=device_str)
-        agent_right = DQNAgent(obs_dim=obs_dim, action_space_n=action_space_n, device=device_str)
+    elif config.agent_type == "sac":
+        agent_kwargs = dict(
+            obs_dim=obs_dim,
+            action_space_n=action_space_n,
+            gamma=getattr(config, "gamma", 0.99),
+            batch_size=getattr(config, "batch_size", 128),
+            buffer_capacity=getattr(config, "buffer_capacity", 100_000),
+            learn_start=getattr(config, "learn_start", 5_000),
+            actor_lr=getattr(config, "actor_lr", 3e-4),
+            critic_lr=getattr(config, "critic_lr", 3e-4),
+            alpha_lr=getattr(config, "alpha_lr", 3e-4),
+            tau=getattr(config, "tau", 0.005),
+            alpha=getattr(config, "alpha", 0.2),
+            device=device_str,
+        )
+        agent_left = SACAgent(**agent_kwargs)
+        agent_right = SACAgent(**agent_kwargs)
+    else:
+        raise ValueError(f"Unknown agent type: {config.agent_type}")
 
     # Optional: load latest checkpoint
     if getattr(config, "load_latest", True):

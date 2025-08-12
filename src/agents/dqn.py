@@ -26,79 +26,49 @@ from src.config import Config
 
 
 
+from src.agents.base import BaseAgent
+
 __all__ = ["QNetwork", "DQNAgent"]
 
 
-
-
-
 class QNetwork(nn.Module):
-
     """
-
     Simple MLP approximating Q-values for a discrete action space.
 
-
-
     Architecture:
-
     - Input: obs_dim
-
     - Hidden layers: 512, 512 with ReLU
-
     - Output: action_space_n (Q-value for each action)
-
     """
 
-
-
     def __init__(self, obs_dim: int, action_space_n: int):
-
         super().__init__()
-
         self.obs_dim = obs_dim
-
         self.action_space_n = action_space_n
 
-
-
         self.net = nn.Sequential(
-
             nn.Linear(obs_dim, 512),
-
             nn.ReLU(inplace=True),
-
             nn.Linear(512, 512),
-
             nn.ReLU(inplace=True),
-
             nn.Linear(512, action_space_n),
-
         )
 
-
-
         # Initialize weights
-
         for m in self.net:
-
             if isinstance(m, nn.Linear):
-
                 nn.init.kaiming_uniform_(m.weight, nonlinearity="relu")
-
                 nn.init.zeros_(m.bias)
 
-
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-
         return self.net(x)
 
 
+class DQNAgent(BaseAgent):
+    @property
+    def agent_type(self) -> str:
+        return "dqn"
 
-
-
-class DQNAgent:
     """
     Double DQN agent with a target network, replay buffer, and epsilon-greedy policy.
 
