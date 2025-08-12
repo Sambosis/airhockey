@@ -89,7 +89,6 @@ class Trainer:
                 explore_value,
                 f"{avg_len:.1f}", f"{avg_ret_l:+.3f}/{avg_ret_r:+.3f}", f"{ep_dur:.2f}",
                 "viz" if visualize else "")
-            table.add_column(explore_metric, justify="center")
             self.console.print(table)
         else:
             if self.agent_left.agent_type == 'dqn':
