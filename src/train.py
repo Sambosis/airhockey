@@ -19,7 +19,15 @@ except Exception:  # pragma: no cover
 
 from src.env import AirHockeyEnv, GameState
 from src.render import Renderer
-from src.agents.dqn import DQNAgent
+from typing import Protocol
+
+class _AgentAPI(Protocol):
+    epsilon: float
+    def select_action(self, obs, training: bool = True) -> int: ...
+    def remember(self, s, a, r, s2, done) -> None: ...
+    def update(self) -> Dict[str, Any]: ...
+
+
 from src.utils import save_checkpoint
 from recorder import record_pygame
 
@@ -30,8 +38,8 @@ class Trainer:
     def __init__(
         self,
         env: AirHockeyEnv,
-        agent_left: DQNAgent,
-        agent_right: DQNAgent,
+        agent_left: _AgentAPI,
+        agent_right: _AgentAPI,
         renderer: Renderer,
         visualize_every_n: int = 5,
         device: str | None = None,

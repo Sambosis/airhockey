@@ -104,6 +104,9 @@ class Config:
     vel_norm_mallet: float = 9.0  # equals mallet_speed by default
     mirror_right_obs: bool = True  # mirror horizontally for right agent's perspective
 
+    # Algorithm selection: "dqn" or "dueling"
+    algo: str = "dqn"
+
     # DQN / RL hyperparameters
     lr: float = 1e-4
     gamma: float = 0.99

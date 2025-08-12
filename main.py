@@ -89,6 +89,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--vel-norm-puck", type=float, dest="vel_norm_puck", help="Normalization constant for puck velocities")
     parser.add_argument("--mirror-right-obs", action=argparse.BooleanOptionalAction, dest="mirror_right_obs", help="Mirror observations for right agent")
 
+    # Algorithm selection
+    parser.add_argument("--algo", type=str, choices=["dqn", "dueling"], help="RL algorithm to use (dqn or dueling)")
+
     # DQN / RL hyperparameters
     parser.add_argument("--lr", type=float, help="Learning rate")
     parser.add_argument("--gamma", type=float, help="Discount factor")
@@ -210,13 +213,20 @@ def main() -> None:
         device=device_str,
     )
 
+    # Select agent class based on algorithm
+    algo = getattr(config, "algo", "dqn").lower()
+    if algo == "dueling":
+        from src.agents.dueling_dqn import DuelingDQNAgent as AgentClass
+    else:
+        from src.agents.dqn import DQNAgent as AgentClass
+
     try:
-        agent_left = DQNAgent(**agent_kwargs)
-        agent_right = DQNAgent(**agent_kwargs)
+        agent_left = AgentClass(**agent_kwargs)
+        agent_right = AgentClass(**agent_kwargs)
     except TypeError:
         # Fallback to minimal constructor if the above signature doesn't match
-        agent_left = DQNAgent(obs_dim=obs_dim, action_space_n=action_space_n, device=device_str)
-        agent_right = DQNAgent(obs_dim=obs_dim, action_space_n=action_space_n, device=device_str)
+        agent_left = AgentClass(obs_dim=obs_dim, action_space_n=action_space_n, device=device_str)
+        agent_right = AgentClass(obs_dim=obs_dim, action_space_n=action_space_n, device=device_str)
 
     # Optional: load latest checkpoint
     if getattr(config, "load_latest", True):

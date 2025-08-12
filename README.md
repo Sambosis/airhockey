@@ -1,6 +1,6 @@
 # AirHockey Trainer
 
-A self-play DQN trainer for Air Hockey with support for multiple mallets per side.
+A self-play RL trainer for Air Hockey with support for multiple mallets per side.
 
 ## Multi-Mallet Feature
 
@@ -16,6 +16,17 @@ Examples:
 - 2 mallets per side: 25 actions, 20 observations
 - 3 mallets per side: 125 actions, 28 observations
 - 4 mallets per side: 625 actions, 36 observations
+
+## Algorithm selection
+
+Use `--algo` to choose the RL algorithm:
+- `dqn` (default): Standard Double DQN
+- `dueling`: Dueling Double DQN (value/advantage streams)
+
+Example:
+```bash
+python ./main.py --algo dueling --episodes 100 --visualize-every-n 0
+```
 
 ## CLI usage
 
