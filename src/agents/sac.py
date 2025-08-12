@@ -43,7 +43,7 @@ class Actor(nn.Module):
         action = torch.argmax(action_probs, dim=-1)
 
         # The log_prob is the log_prob of the chosen action
-        log_prob = (probs * log_probs).sum(-1, keepdim=True)
+        log_prob = log_probs.gather(1, action.unsqueeze(1))
 
         return action, log_prob, action_probs
 
