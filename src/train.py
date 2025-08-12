@@ -19,7 +19,7 @@ except Exception:  # pragma: no cover
 
 from src.env import AirHockeyEnv, GameState
 from src.render import Renderer
-from src.agents.dqn import DQNAgent
+from src.agents.base import BaseAgent
 from src.utils import save_checkpoint
 from recorder import record_pygame
 
@@ -30,8 +30,8 @@ class Trainer:
     def __init__(
         self,
         env: AirHockeyEnv,
-        agent_left: DQNAgent,
-        agent_right: DQNAgent,
+        agent_left: BaseAgent,
+        agent_right: BaseAgent,
         renderer: Renderer,
         visualize_every_n: int = 5,
         device: str | None = None,
@@ -75,20 +75,34 @@ class Trainer:
             goal = result.get("goal") or "—"
             def fmt(r: float) -> str:
                 return f"[green]{r:+.3f}[/]" if r >= 0 else f"[red]{r:+.3f}[/]"
+
+            if self.agent_left.agent_type == 'dqn':
+                explore_metric = f"Eps L/R"
+                explore_value = f"{result.get('epsilon_left', 0.0):.3f}/{result.get('epsilon_right', 0.0):.3f}"
+            else:
+                explore_metric = f"Alpha L/R"
+                explore_value = f"{result.get('alpha_left', 0.0):.3f}/{result.get('alpha_right', 0.0):.3f}"
+
             table.add_row(
                 str(ep_index), str(result["steps"]), str(goal),
                 fmt(result["total_reward_left"]), fmt(result["total_reward_right"]),
-                f"{result['epsilon_left']:.3f}/{result['epsilon_right']:.3f}",
+                explore_value,
                 f"{avg_len:.1f}", f"{avg_ret_l:+.3f}/{avg_ret_r:+.3f}", f"{ep_dur:.2f}",
                 "viz" if visualize else "")
+            table.add_column(explore_metric, justify="center")
             self.console.print(table)
         else:
+            if self.agent_left.agent_type == 'dqn':
+                explore_str = f"eps(L/R)=({result.get('epsilon_left', 0.0):.3f}/{result.get('epsilon_right', 0.0):.3f})"
+            else:
+                explore_str = f"alpha(L/R)=({result.get('alpha_left', 0.0):.3f}/{result.get('alpha_right', 0.0):.3f})"
+
             print(
                 f"[Episode {ep_index:6d}] steps={result['steps']:4d} "
                 f"goal={result['goal'] or 'none':>5s} "
                 f"R_left={result['total_reward_left']:+.3f} "
                 f"R_right={result['total_reward_right']:+.3f} "
-                f"eps(L/R)=({result['epsilon_left']:.3f}/{result['epsilon_right']:.3f}) "
+                f"{explore_str} "
                 f"avg_len={avg_len:.1f} "
                 f"avg_R(L/R)=({avg_ret_l:+.3f}/{avg_ret_r:+.3f}) "
                 f"{('(viz) ' if visualize else '')}dur={ep_dur:.2f}s")
@@ -162,11 +176,13 @@ class Trainer:
                 total_reward_right += r_right
                 if visualize and "state" in info and isinstance(info["state"], GameState):
                     try:
+                        eps_left = float(getattr(self.agent_left, "epsilon", 0.0)) if self.agent_left.agent_type == 'dqn' else float(getattr(self.agent_left, "alpha", 0.0))
+                        eps_right = float(getattr(self.agent_right, "epsilon", 0.0)) if self.agent_right.agent_type == 'dqn' else float(getattr(self.agent_right, "alpha", 0.0))
                         self.renderer.draw(
                             state=info["state"],
                             episode_idx=self.episode,
-                            eps_left=float(getattr(self.agent_left, "epsilon", 0.0)),
-                            eps_right=float(getattr(self.agent_right, "epsilon", 0.0)),
+                            eps_left=eps_left,
+                            eps_right=eps_right,
                         )
                     except Exception as e:
                         print(f"[Trainer] Renderer.draw() error: {e}")
@@ -183,19 +199,27 @@ class Trainer:
                 pass
         avg_loss_left = (loss_sum_left / loss_count_left) if loss_count_left else 0.0
         avg_loss_right = (loss_sum_right / loss_count_right) if loss_count_right else 0.0
-        return {
+
+        results = {
             "episode": self.episode,
             "steps": steps,
             "total_reward_left": float(total_reward_left),
             "total_reward_right": float(total_reward_right),
-            "epsilon_left": float(getattr(self.agent_left, "epsilon", 0.0)),
-            "epsilon_right": float(getattr(self.agent_right, "epsilon", 0.0)),
             "avg_loss_left": float(avg_loss_left),
             "avg_loss_right": float(avg_loss_right),
             "goal": last_info.get("goal") if last_info else None,
             "score_left": last_info.get("score_left", getattr(self.env, "score_left", 0)) if last_info else getattr(self.env, "score_left", 0),
             "score_right": last_info.get("score_right", getattr(self.env, "score_right", 0)) if last_info else getattr(self.env, "score_right", 0),
         }
+
+        if self.agent_left.agent_type == 'dqn':
+            results["epsilon_left"] = float(getattr(self.agent_left, "epsilon", 0.0))
+            results["epsilon_right"] = float(getattr(self.agent_right, "epsilon", 0.0))
+        elif self.agent_left.agent_type == 'sac':
+            results["alpha_left"] = float(getattr(self.agent_left, "alpha", 0.0))
+            results["alpha_right"] = float(getattr(self.agent_right, "alpha", 0.0))
+
+        return results
 
     # ------------------------------------------------------------------
     def maybe_checkpoint(self) -> None:

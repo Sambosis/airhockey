@@ -104,6 +104,9 @@ class Config:
     vel_norm_mallet: float = 9.0  # equals mallet_speed by default
     mirror_right_obs: bool = True  # mirror horizontally for right agent's perspective
 
+    # Agent Selection
+    agent_type: str = "dqn"  # "dqn" or "sac"
+
     # DQN / RL hyperparameters
     lr: float = 1e-4
     gamma: float = 0.99
@@ -112,10 +115,17 @@ class Config:
     learn_start: int = 5_000  # steps before learning starts
     target_sync: int = 10_000  # gradient steps between target updates
 
-    # Epsilon-greedy exploration
+    # Epsilon-greedy exploration (DQN-specific)
     eps_start: float = 1.0
     eps_end: float = 0.05
     eps_decay_frames: int = 300_000
+
+    # SAC-specific hyperparameters
+    actor_lr: float = 3e-4
+    critic_lr: float = 3e-4
+    alpha_lr: float = 3e-4
+    tau: float = 0.005  # soft target update coefficient
+    alpha: float = 0.2  # initial entropy coefficient
 
     # Training control
     episodes: int = 10_000
@@ -142,6 +152,10 @@ class Config:
     _resolved_device: str = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
+        # Validate agent type
+        if self.agent_type not in {"dqn", "sac"}:
+            raise ValueError(f"Unknown agent_type: '{self.agent_type}'. Must be 'dqn' or 'sac'.")
+
         # Validate basic ranges
         if self.width <= 0 or self.height <= 0:
             raise ValueError("width and height must be positive integers.")
