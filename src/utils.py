@@ -11,6 +11,7 @@ import torch
 if TYPE_CHECKING:
     from src.env import AirHockeyEnv  # noqa: F401
     from src.agents.dqn import DQNAgent  # noqa: F401
+    from src.agents.dueling_dqn import DuelingDQNAgent  # noqa: F401
     from src.config import Config  # noqa: F401
 
 
