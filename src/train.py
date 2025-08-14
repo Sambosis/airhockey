@@ -73,12 +73,13 @@ class Trainer:
         avg_len = float(np.mean(self.recent_lengths)) if self.recent_lengths else result["steps"]
         avg_ret_l = float(np.mean(self.recent_returns_left)) if self.recent_returns_left else result["total_reward_left"]
         avg_ret_r = float(np.mean(self.recent_returns_right)) if self.recent_returns_right else result["total_reward_right"]
+        steps_per_sec = result["steps"] / ep_dur if ep_dur > 0 else 0.0
         if _RICH and self.console is not None and Table is not None:
             table = Table(show_header=True, header_style="bold cyan", expand=False, padding=(0, 1))
             for col, just in (
                 ("Ep", "right"), ("Steps", "right"), ("Goal", "center"),
                 ("R_left", "right"), ("R_right", "right"), ("Eps L/R", "center"),
-                ("AvgLen", "right"), ("AvgR L/R", "center"), ("Dur(s)", "right"), ("Flags", "left")):
+                ("AvgLen", "right"), ("AvgR L/R", "center"), ("Steps/s", "right"), ("Flags", "left")):
                 table.add_column(col, justify=just)
             goal = result.get("goal") or "—"
             def fmt(r: float) -> str:
@@ -87,7 +88,7 @@ class Trainer:
                 str(ep_index), str(result["steps"]), str(goal),
                 fmt(result["total_reward_left"]), fmt(result["total_reward_right"]),
                 f"{result['epsilon_left']:.3f}/{result['epsilon_right']:.3f}",
-                f"{avg_len:.1f}", f"{avg_ret_l:+.3f}/{avg_ret_r:+.3f}", f"{ep_dur:.2f}",
+                f"{avg_len:.1f}", f"{avg_ret_l:+.3f}/{avg_ret_r:+.3f}", f"{steps_per_sec:.2f}",
                 "viz" if visualize else "")
             self.console.print(table)
         else:
@@ -99,7 +100,7 @@ class Trainer:
                 f"eps(L/R)=({result['epsilon_left']:.3f}/{result['epsilon_right']:.3f}) "
                 f"avg_len={avg_len:.1f} "
                 f"avg_R(L/R)=({avg_ret_l:+.3f}/{avg_ret_r:+.3f}) "
-                f"{('(viz) ' if visualize else '')}dur={ep_dur:.2f}s")
+                f"{('(viz) ' if visualize else '')}steps/s={steps_per_sec:.2f}")
 
     # ------------------------------------------------------------------
     def run(self, num_episodes: int) -> None:
