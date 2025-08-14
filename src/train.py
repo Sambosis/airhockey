@@ -11,10 +11,12 @@ import numpy as np
 try:  # pragma: no cover
     from rich.console import Console
     from rich.table import Table
+    from rich.live import Live
     _RICH = True
 except Exception:  # pragma: no cover
     Console = None  # type: ignore
     Table = None  # type: ignore
+    Live = None  # type: ignore
     _RICH = False
 
 from src.env import AirHockeyEnv, GameState
@@ -62,6 +64,7 @@ class Trainer:
         self.recent_lengths: deque[int] = deque(maxlen=100)
         self.rng = np.random.default_rng(seed)
         self.console: Any = None
+        self.live: Any = None
         if _RICH and Console is not None:
             try:
                 self.console = Console(width=140)
@@ -90,7 +93,10 @@ class Trainer:
                 f"{result['epsilon_left']:.3f}/{result['epsilon_right']:.3f}",
                 f"{avg_len:.1f}", f"{avg_ret_l:+.3f}/{avg_ret_r:+.3f}", f"{steps_per_sec:.2f}",
                 "viz" if visualize else "")
-            self.console.print(table)
+            if self.live is not None:
+                self.live.update(table, refresh=True)
+            else:
+                self.console.print(table)
         else:
             print(
                 f"[Episode {ep_index:6d}] steps={result['steps']:4d} "
@@ -108,21 +114,31 @@ class Trainer:
         if num_episodes <= 0:
             raise ValueError("num_episodes must be > 0")
         start = time.time()
-        for _ in range(num_episodes):
-            self.episode += 1
-            ep = self.episode
-            visualize = self.visualize_every_n > 0 and (ep % self.visualize_every_n == 0)
-            t0 = time.time()
-            result = self.run_episode(visualize=visualize)
-            dur = time.time() - t0
-            self.recent_returns_left.append(result["total_reward_left"])
-            self.recent_returns_right.append(result["total_reward_right"])
-            self.recent_lengths.append(result["steps"])
-            self._log_episode(ep, result, dur, visualize)
-            try:
-                self.maybe_checkpoint()
-            except Exception as e:  # pragma: no cover
-                print(f"[Trainer] Warning: checkpoint failed episode {self.episode}: {e}")
+        live: Optional[Live] = None
+        if _RICH and self.console is not None and Live is not None:
+            live = Live(console=self.console, refresh_per_second=4)
+            live.start()
+            self.live = live
+        try:
+            for _ in range(num_episodes):
+                self.episode += 1
+                ep = self.episode
+                visualize = self.visualize_every_n > 0 and (ep % self.visualize_every_n == 0)
+                t0 = time.time()
+                result = self.run_episode(visualize=visualize)
+                dur = time.time() - t0
+                self.recent_returns_left.append(result["total_reward_left"])
+                self.recent_returns_right.append(result["total_reward_right"])
+                self.recent_lengths.append(result["steps"])
+                self._log_episode(ep, result, dur, visualize)
+                try:
+                    self.maybe_checkpoint()
+                except Exception as e:  # pragma: no cover
+                    print(f"[Trainer] Warning: checkpoint failed episode {self.episode}: {e}")
+        finally:
+            if live is not None:
+                live.stop()
+                self.live = None
         total_dur = time.time() - start
         msg = (
             f"Finished {num_episodes} episodes in {total_dur/60.0:.2f} min. "
