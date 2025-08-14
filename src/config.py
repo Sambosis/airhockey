@@ -70,14 +70,14 @@ class Config:
     height: int = 400
 
     # Simulation/physics
-    dt: float = 1.0 / 60.0
+    dt: float = 1.0 / 120.0
     friction: float = 0.997  # multiplicative velocity decay each step
 
     # Objects
     puck_radius: float = 10.0
     puck_mass: float = 1.0
     mallet_radius: float = 20.0
-    mallet_speed: float = 12.0  # max step speed per tick (px)
+    mallet_speed: float = 9.0  # max step speed per tick (px)
     mallets_per_side: int = 2  # number of mallets each side controls
 
     # Puck initial speed (randomized magnitude range, px per tick)
@@ -90,12 +90,12 @@ class Config:
     goal_height_ratio: float = 0.20
 
     # Rewards
-    reward_goal: float = 10.0
-    reward_concede: float = -1.0
-    reward_time_penalty: float = -0.006
-    reward_toward_opponent: float = 0.002
-    reward_distance_weight: float = 0.002  # applied to negative distance
-    reward_on_hit: float = 8.0  # reward for hitting the puck
+    reward_goal: float = 50.0
+    reward_concede: float = -30.0
+    reward_time_penalty: float = -0.01
+    reward_toward_opponent: float = 0.0002
+    reward_distance_weight: float = 0.0002  # applied to negative distance
+    reward_on_hit: float = 5.0  # reward for hitting the puck
 
     # Observation normalization
     # Positions typically scaled to [-1, 1] using table size directly.
@@ -110,15 +110,15 @@ class Config:
     # DQN / RL hyperparameters
     lr: float = 1e-4
     gamma: float = 0.99
-    batch_size: int = 128
-    buffer_capacity: int = 100_000
+    batch_size: int = 1024
+    buffer_capacity: int = 1_000_000
     learn_start: int = 5_000  # steps before learning starts
-    target_sync: int = 10_000  # gradient steps between target updates
+    target_sync: int = 50_000  # gradient steps between target updates
 
     # Epsilon-greedy exploration
     eps_start: float = 1.0
-    eps_end: float = 0.05
-    eps_decay_frames: int = 300_000
+    eps_end: float = 0.005
+    eps_decay_frames: int = 3_000_000
 
     # Training control
     episodes: int = 10_000
@@ -126,7 +126,7 @@ class Config:
 
     # Rendering
     render_fps: int = 60
-    visualize_every_n: int = 5
+    visualize_every_n: int = 100
     no_sound: bool = True  # ensure pygame mixer is not initialized
 
     # Checkpointing
