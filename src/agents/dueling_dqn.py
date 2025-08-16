@@ -15,9 +15,9 @@ __all__ = ["DuelingQNetwork", "DuelingDQNAgent"]
 
 class DuelingQNetwork(nn.Module):
     """
-    MLP with dueling architecture for discrete action-value estimation.
+    Optimized MLP with dueling architecture for discrete action-value estimation.
 
-    - Shared feature extractor
+    - Shared feature extractor with batch normalization and dropout
     - Separate value and advantage streams
     - Aggregation: Q(s,a) = V(s) + (A(s,a) - mean_a A(s,a))
     """
@@ -27,30 +27,47 @@ class DuelingQNetwork(nn.Module):
         self.obs_dim = obs_dim
         self.action_space_n = action_space_n
 
-        hidden = 512
+        # Optimized shared feature extractor
+        hidden = 1024
         self.feature = nn.Sequential(
             nn.Linear(obs_dim, hidden),
+            nn.BatchNorm1d(hidden),
             nn.ReLU(inplace=True),
+            nn.Dropout(0.1),
+            
             nn.Linear(hidden, hidden),
+            nn.BatchNorm1d(hidden),
             nn.ReLU(inplace=True),
+            nn.Dropout(0.1),
         )
+        
+        # Optimized value stream
         self.value_head = nn.Sequential(
-            nn.Linear(hidden, hidden),
+            nn.Linear(hidden, 512),
+            nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
-            nn.Linear(hidden, 1),
+            nn.Dropout(0.05),
+            nn.Linear(512, 1),
         )
+        
+        # Optimized advantage stream
         self.adv_head = nn.Sequential(
-            nn.Linear(hidden, hidden),
+            nn.Linear(hidden, 512),
+            nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
-            nn.Linear(hidden, action_space_n),
+            nn.Dropout(0.05),
+            nn.Linear(512, action_space_n),
         )
 
-        # Weight initialization
+        # Improved weight initialization
         for module in self.modules():
             if isinstance(module, nn.Linear):
-                nn.init.kaiming_uniform_(module.weight, nonlinearity="relu")
+                nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
                 if module.bias is not None:
-                    nn.init.zeros_(module.bias)
+                    nn.init.constant_(module.bias, 0)
+            elif isinstance(module, nn.BatchNorm1d):
+                nn.init.constant_(module.weight, 1)
+                nn.init.constant_(module.bias, 0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         h = self.feature(x)

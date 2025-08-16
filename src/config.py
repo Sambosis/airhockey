@@ -107,18 +107,18 @@ class Config:
     # Algorithm selection: "dqn" or "dueling"
     algo: str = "dqn"
 
-    # DQN / RL hyperparameters
-    lr: float = 1e-4
-    gamma: float = 0.99
-    batch_size: int = 1024
-    buffer_capacity: int = 1_000_000
-    learn_start: int = 5_000  # steps before learning starts
-    target_sync: int = 50_000  # gradient steps between target updates
+    # DQN / RL hyperparameters - OPTIMIZED
+    lr: float = 3e-4  # Increased from 1e-4 for faster learning
+    gamma: float = 0.995  # Slightly increased for longer-term planning
+    batch_size: int = 512  # Reduced from 1024 for more frequent updates
+    buffer_capacity: int = 500_000  # Reduced from 1M for better sample efficiency
+    learn_start: int = 10_000  # Increased to ensure better initial samples
+    target_sync: int = 10_000  # Reduced from 50k for more frequent target updates
 
-    # Epsilon-greedy exploration
+    # Epsilon-greedy exploration - OPTIMIZED
     eps_start: float = 1.0
-    eps_end: float = 0.005
-    eps_decay_frames: int = 3_000_000
+    eps_end: float = 0.01  # Increased from 0.005 for more exploration
+    eps_decay_frames: int = 1_500_000  # Reduced from 3M for faster convergence
 
     # Training control
     episodes: int = 10_000
