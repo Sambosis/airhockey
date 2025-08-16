@@ -33,65 +33,55 @@ __all__ = ["QNetwork", "DQNAgent"]
 
 
 class QNetwork(nn.Module):
-
     """
-
-    Simple MLP approximating Q-values for a discrete action space.
-
-
+    Enhanced MLP approximating Q-values for a discrete action space.
 
     Architecture:
-
     - Input: obs_dim
-
-    - Hidden layers: 512, 512 with ReLU
-
+    - Hidden layers: 512, 512, 256 with ReLU and BatchNorm
+    - Dropout for regularization
     - Output: action_space_n (Q-value for each action)
-
     """
 
-
-
-    def __init__(self, obs_dim: int, action_space_n: int):
-
+    def __init__(self, obs_dim: int, action_space_n: int, dropout_rate: float = 0.1):
         super().__init__()
-
         self.obs_dim = obs_dim
-
         self.action_space_n = action_space_n
 
-
-
+        # Enhanced architecture with batch normalization and dropout
         self.net = nn.Sequential(
-
             nn.Linear(obs_dim, 512),
-
+            nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
-
+            nn.Dropout(dropout_rate),
+            
             nn.Linear(512, 512),
-
+            nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
-
-            nn.Linear(512, action_space_n),
-
+            nn.Dropout(dropout_rate),
+            
+            nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout_rate),
+            
+            nn.Linear(256, action_space_n),
         )
 
-
-
-        # Initialize weights
-
+        # Initialize weights with better initialization
         for m in self.net:
-
             if isinstance(m, nn.Linear):
-
-                nn.init.kaiming_uniform_(m.weight, nonlinearity="relu")
-
+                nn.init.xavier_uniform_(m.weight)
+                nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.BatchNorm1d):
+                nn.init.ones_(m.weight)
                 nn.init.zeros_(m.bias)
 
-
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-
+        # Handle single sample case for batch norm
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
+            return self.net(x).squeeze(0)
         return self.net(x)
 
 
@@ -141,6 +131,8 @@ class DQNAgent:
         buffer_capacity: int = 100_000,
         device: str | torch.device = "auto",
         seed: Optional[int] = None,
+        soft_update: bool = True,  # Enable soft target updates
+        tau: float = 0.005,  # Polyak averaging coefficient
     ):
         # Resolve device
         if device == "auto":
@@ -161,6 +153,8 @@ class DQNAgent:
         self.batch_size = int(batch_size)
         self.learn_start = int(learn_start)
         self.target_sync = int(target_sync)
+        self.soft_update = soft_update
+        self.tau = tau
 
         # Support both naming conventions for epsilon schedule
         e_start = eps_start if eps_start is not None else epsilon_start
@@ -178,6 +172,13 @@ class DQNAgent:
         self.target_net.eval()
 
         self.optimizer = optim.Adam(self.q_net.parameters(), lr=lr)
+        
+        # Add learning rate scheduler for better convergence
+        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            self.optimizer, 
+            T_max=1000000,  # Total number of gradient steps for one cosine cycle
+            eta_min=lr * 0.1  # Minimum learning rate (10% of initial)
+        )
 
         # Tracking counters
         self.frame_idx: int = 0
@@ -271,6 +272,9 @@ class DQNAgent:
         # Optional gradient clipping for stability
         nn.utils.clip_grad_norm_(self.q_net.parameters(), max_norm=10.0)
         self.optimizer.step()
+        
+        # Step the learning rate scheduler
+        self.scheduler.step()
 
         self.gradient_steps += 1
         if self.gradient_steps % self.target_sync == 0:
@@ -284,13 +288,19 @@ class DQNAgent:
 
     def sync_target(self) -> None:
         """
-        Hard update: Copy online network weights to target network.
+        Update target network: either hard update or soft update with Polyak averaging.
         """
-        self.target_net.load_state_dict(self.q_net.state_dict())
+        if self.soft_update:
+            # Soft update: target = tau * online + (1 - tau) * target
+            for target_param, online_param in zip(self.target_net.parameters(), self.q_net.parameters()):
+                target_param.data.copy_(self.tau * online_param.data + (1.0 - self.tau) * target_param.data)
+        else:
+            # Hard update: Copy online network weights to target network
+            self.target_net.load_state_dict(self.q_net.state_dict())
 
     def save(self, path: str) -> None:
         """
-        Saves agent state (networks, optimizer, and metadata) to a file.
+        Saves agent state (networks, optimizer, scheduler, and metadata) to a file.
 
         Args:
             path: Destination file path (e.g., 'checkpoints/agent_left.pt').
@@ -300,6 +310,7 @@ class DQNAgent:
             "q_net": self.q_net.state_dict(),
             "target_net": self.target_net.state_dict(),
             "optimizer": self.optimizer.state_dict(),
+            "scheduler": self.scheduler.state_dict(),
             "meta": {
                 "epsilon": self.epsilon,
                 "epsilon_min": self.epsilon_min,
@@ -314,6 +325,8 @@ class DQNAgent:
                 "frame_idx": self.frame_idx,
                 "gradient_steps": self.gradient_steps,
                 "device": str(self.device),
+                "soft_update": self.soft_update,
+                "tau": self.tau,
             },
         }
         torch.save(payload, path)
@@ -335,6 +348,8 @@ class DQNAgent:
         self.target_net.load_state_dict(checkpoint["target_net"])
         if "optimizer" in checkpoint:
             self.optimizer.load_state_dict(checkpoint["optimizer"])
+        if "scheduler" in checkpoint:
+            self.scheduler.load_state_dict(checkpoint["scheduler"])
 
         meta: Dict[str, Any] = checkpoint.get("meta", {})
         self.epsilon = float(meta.get("epsilon", self.epsilon))
@@ -347,4 +362,6 @@ class DQNAgent:
         self.target_sync = int(meta.get("target_sync", self.target_sync))
         self.frame_idx = int(meta.get("frame_idx", self.frame_idx))
         self.gradient_steps = int(meta.get("gradient_steps", self.gradient_steps))
+        self.soft_update = bool(meta.get("soft_update", self.soft_update))
+        self.tau = float(meta.get("tau", self.tau))
         # obs_dim, action_space_n are immutable at runtime for safety
