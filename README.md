@@ -28,6 +28,18 @@ Example:
 python ./main.py --algo dueling --episodes 100 --visualize-every-n 0
 ```
 
+## Hyperparameter search
+
+Experiment with different training settings using a simple random search
+utility:
+
+```bash
+python -m src.hparam_opt --trials 5 --episodes 5
+```
+
+This runs a few short self-play sessions and prints the configuration that
+achieved the highest average reward for the left agent.
+
 ## CLI usage
 
 You can override any `Config` field from the command line via `main.py`.
