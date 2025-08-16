@@ -105,20 +105,20 @@ class Config:
     mirror_right_obs: bool = True  # mirror horizontally for right agent's perspective
 
     # Algorithm selection: "dqn" or "dueling"
-    algo: str = "dqn"
+    algo: str = "dueling"  # Changed from "dqn" to "dueling" for better performance
 
     # DQN / RL hyperparameters
-    lr: float = 1e-4
-    gamma: float = 0.99
-    batch_size: int = 1024
-    buffer_capacity: int = 1_000_000
-    learn_start: int = 5_000  # steps before learning starts
-    target_sync: int = 50_000  # gradient steps between target updates
+    lr: float = 5e-4  # Increased from 1e-4 for faster initial learning
+    gamma: float = 0.995  # Increased from 0.99 for better long-term planning
+    batch_size: int = 256  # Reduced from 1024 for more frequent updates
+    buffer_capacity: int = 500_000  # Reduced from 1_000_000 for memory efficiency
+    learn_start: int = 1_000  # Reduced from 5_000 for faster learning start
+    target_sync: int = 10_000  # Reduced from 50_000 for more frequent target updates
 
     # Epsilon-greedy exploration
     eps_start: float = 1.0
-    eps_end: float = 0.005
-    eps_decay_frames: int = 3_000_000
+    eps_end: float = 0.01  # Increased from 0.005 for more exploration
+    eps_decay_frames: int = 1_000_000  # Reduced from 3_000_000 for faster decay
 
     # Training control
     episodes: int = 10_000
@@ -126,11 +126,11 @@ class Config:
 
     # Rendering
     render_fps: int = 60
-    visualize_every_n: int = 100
+    visualize_every_n: int = 50  # Reduced from 100 for more frequent visualization
     no_sound: bool = True  # ensure pygame mixer is not initialized
 
     # Checkpointing
-    checkpoint_every: int = 100  # in episodes
+    checkpoint_every: int = 50  # Reduced from 100 for more frequent checkpoints
     checkpoint_dir: str = "checkpoints"
     load_latest: bool = True  # load latest checkpoint on startup if available
 
