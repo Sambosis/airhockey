@@ -94,6 +94,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
     # DQN / RL hyperparameters
     parser.add_argument("--lr", type=float, help="Learning rate")
+    parser.add_argument("--lr-final", type=float, dest="lr_final", help="Final learning rate after decay")
+    parser.add_argument("--lr-decay-frames", type=int, dest="lr_decay_frames", help="Frames to decay learning rate")
     parser.add_argument("--gamma", type=float, help="Discount factor")
     parser.add_argument("--batch-size", type=int, dest="batch_size", help="Batch size")
     parser.add_argument("--buffer-capacity", type=int, dest="buffer_capacity", help="Replay buffer capacity")
@@ -207,6 +209,8 @@ def main() -> None:
         buffer_capacity=getattr(config, "buffer_capacity", 100_000),
         learn_start=getattr(config, "learn_start", 5_000),
         target_sync=getattr(config, "target_sync", 1_000),
+        lr_final=getattr(config, "lr_final", None),
+        lr_decay_frames=getattr(config, "lr_decay_frames", None),
         eps_start=getattr(config, "eps_start", 1.0),
         eps_end=getattr(config, "eps_end", 0.05),
         eps_decay_frames=getattr(config, "eps_decay_frames", 100_000),

@@ -18,7 +18,7 @@ import torch.optim as optim
 
 from src.replay_buffer import ReplayBuffer
 
-from src.utils import epsilon_by_frame
+from src.utils import epsilon_by_frame, lr_by_frame
 
 from src.config import Config
 
@@ -135,6 +135,8 @@ class DQNAgent:
         eps_start: float | None = None,
         eps_end: float | None = None,
         eps_decay_frames: int | None = None,
+        lr_final: float | None = None,
+        lr_decay_frames: int | None = None,
         target_sync: int = 1_000,
         learn_start: int = 5_000,
         buffer: Optional[ReplayBuffer] = None,
@@ -171,6 +173,10 @@ class DQNAgent:
         self.epsilon_min = float(0.05 if e_end is None else e_end)
         self.epsilon_decay_steps = int(100_000 if e_decay is None else e_decay)
         self.epsilon = self.eps_start
+
+        self.lr_initial = float(lr)
+        self.lr_final = float(lr if lr_final is None else lr_final)
+        self.lr_decay_frames = int(0 if lr_decay_frames is None else lr_decay_frames)
 
         self.q_net = QNetwork(obs_dim, action_space_n).to(self.device)
         self.target_net = QNetwork(obs_dim, action_space_n).to(self.device)
@@ -271,8 +277,18 @@ class DQNAgent:
         # Optional gradient clipping for stability
         nn.utils.clip_grad_norm_(self.q_net.parameters(), max_norm=10.0)
         self.optimizer.step()
-
         self.gradient_steps += 1
+
+        if self.lr_decay_frames > 0:
+            lr_now = lr_by_frame(
+                self.gradient_steps, self.lr_initial, self.lr_final, self.lr_decay_frames
+            )
+            for g in self.optimizer.param_groups:
+                g["lr"] = lr_now
+            metrics["lr"] = float(lr_now)
+        else:
+            metrics["lr"] = float(self.optimizer.param_groups[0]["lr"])
+
         if self.gradient_steps % self.target_sync == 0:
             self.sync_target()
 
@@ -313,6 +329,10 @@ class DQNAgent:
                 "target_sync": self.target_sync,
                 "frame_idx": self.frame_idx,
                 "gradient_steps": self.gradient_steps,
+                "lr": self.optimizer.param_groups[0]["lr"],
+                "lr_initial": self.lr_initial,
+                "lr_final": self.lr_final,
+                "lr_decay_frames": self.lr_decay_frames,
                 "device": str(self.device),
             },
         }
@@ -347,4 +367,10 @@ class DQNAgent:
         self.target_sync = int(meta.get("target_sync", self.target_sync))
         self.frame_idx = int(meta.get("frame_idx", self.frame_idx))
         self.gradient_steps = int(meta.get("gradient_steps", self.gradient_steps))
+        self.lr_initial = float(meta.get("lr_initial", self.lr_initial))
+        self.lr_final = float(meta.get("lr_final", self.lr_final))
+        self.lr_decay_frames = int(meta.get("lr_decay_frames", self.lr_decay_frames))
+        if "lr" in meta:
+            for g in self.optimizer.param_groups:
+                g["lr"] = float(meta["lr"])
         # obs_dim, action_space_n are immutable at runtime for safety

@@ -108,20 +108,22 @@ class Config:
     algo: str = "dqn"
 
     # DQN / RL hyperparameters
-    lr: float = 1e-4
+    lr: float = 3e-4
+    lr_final: float = 1e-5
+    lr_decay_frames: int = 1_000_000
     gamma: float = 0.99
-    batch_size: int = 1024
-    buffer_capacity: int = 1_000_000
-    learn_start: int = 5_000  # steps before learning starts
-    target_sync: int = 50_000  # gradient steps between target updates
+    batch_size: int = 256
+    buffer_capacity: int = 200_000
+    learn_start: int = 10_000  # steps before learning starts
+    target_sync: int = 10_000  # gradient steps between target updates
 
     # Epsilon-greedy exploration
     eps_start: float = 1.0
-    eps_end: float = 0.005
-    eps_decay_frames: int = 3_000_000
+    eps_end: float = 0.05
+    eps_decay_frames: int = 1_000_000
 
     # Training control
-    episodes: int = 10_000
+    episodes: int = 5_000
     seed: int = 42
 
     # Rendering
@@ -152,6 +154,10 @@ class Config:
             raise ValueError("friction must be in (0, 1].")
         if self.max_steps <= 0:
             raise ValueError("max_steps must be > 0.")
+        if self.lr <= 0.0 or self.lr_final <= 0.0:
+            raise ValueError("lr and lr_final must be > 0.")
+        if self.lr_decay_frames < 0:
+            raise ValueError("lr_decay_frames must be >= 0.")
         if self.batch_size <= 0:
             raise ValueError("batch_size must be > 0.")
         if self.buffer_capacity <= 0:
