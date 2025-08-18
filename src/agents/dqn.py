@@ -38,7 +38,7 @@ class QNetwork(nn.Module):
 
     Architecture:
     - Input: obs_dim
-    - Hidden layers: 1024, 1024, 512 with ReLU, BatchNorm, and Dropout
+    - Hidden layers: 1024, 1024, 512 with ReLU, LayerNorm, and Dropout
     - Output: action_space_n (Q-value for each action)
     """
 
@@ -47,20 +47,21 @@ class QNetwork(nn.Module):
         self.obs_dim = obs_dim
         self.action_space_n = action_space_n
 
-        # Optimized architecture with batch normalization and dropout
+        # Optimized architecture with layer normalization and dropout
+        # Using LayerNorm instead of BatchNorm to avoid batch size issues
         self.net = nn.Sequential(
             nn.Linear(obs_dim, 1024),
-            nn.BatchNorm1d(1024),
+            nn.LayerNorm(1024),
             nn.ReLU(inplace=True),
             nn.Dropout(0.1),
             
             nn.Linear(1024, 1024),
-            nn.BatchNorm1d(1024),
+            nn.LayerNorm(1024),
             nn.ReLU(inplace=True),
             nn.Dropout(0.1),
             
             nn.Linear(1024, 512),
-            nn.BatchNorm1d(512),
+            nn.LayerNorm(512),
             nn.ReLU(inplace=True),
             nn.Dropout(0.05),
             
@@ -73,7 +74,7 @@ class QNetwork(nn.Module):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm1d):
+            elif isinstance(m, nn.LayerNorm):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
@@ -81,7 +82,6 @@ class QNetwork(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
 
         return self.net(x)
-
 
 
 
