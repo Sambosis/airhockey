@@ -58,6 +58,25 @@ def epsilon_by_frame(frame_idx: int, eps_start: float, eps_end: float, decay_fra
     return eps
 
 
+def lr_by_frame(frame_idx: int, lr_start: float, lr_end: float, decay_frames: int) -> float:
+    """Linear learning-rate schedule.
+
+    Args:
+        frame_idx: Current global frame index (>=0).
+        lr_start: Initial learning rate at frame 0.
+        lr_end: Final learning rate after ``decay_frames``.
+        decay_frames: Number of frames to decay over. ``<=0`` keeps ``lr_start``.
+
+    Returns:
+        Learning rate for the given frame.
+    """
+    if decay_frames <= 0:
+        return float(lr_end if frame_idx > 0 else lr_start)
+    t = min(max(frame_idx, 0), decay_frames)
+    lr = lr_start + (lr_end - lr_start) * (t / float(decay_frames))
+    return float(lr)
+
+
 def seed_everything(seed: int) -> None:
     """
     Seed Python, NumPy, and PyTorch for deterministic behavior (as much as possible).
