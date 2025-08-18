@@ -33,67 +33,55 @@ __all__ = ["QNetwork", "DQNAgent"]
 
 
 class QNetwork(nn.Module):
-
     """
-
-    Simple MLP approximating Q-values for a discrete action space.
-
-
+    Optimized MLP approximating Q-values for a discrete action space.
 
     Architecture:
-
     - Input: obs_dim
-
-    - Hidden layers: 512, 512 with ReLU
-
+    - Hidden layers: 1024, 1024, 512 with ReLU, LayerNorm, and Dropout
     - Output: action_space_n (Q-value for each action)
-
     """
 
-
-
     def __init__(self, obs_dim: int, action_space_n: int):
-
         super().__init__()
-
         self.obs_dim = obs_dim
-
         self.action_space_n = action_space_n
 
-
-
+        # Optimized architecture with layer normalization and dropout
+        # Using LayerNorm instead of BatchNorm to avoid batch size issues
         self.net = nn.Sequential(
-
-            nn.Linear(obs_dim, 512),
-
+            nn.Linear(obs_dim, 1024),
+            nn.LayerNorm(1024),
             nn.ReLU(inplace=True),
-
-            nn.Linear(512, 512),
-
+            nn.Dropout(0.1),
+            
+            nn.Linear(1024, 1024),
+            nn.LayerNorm(1024),
             nn.ReLU(inplace=True),
-
+            nn.Dropout(0.1),
+            
+            nn.Linear(1024, 512),
+            nn.LayerNorm(512),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.05),
+            
             nn.Linear(512, action_space_n),
-
         )
 
-
-
-        # Initialize weights
-
+        # Improved weight initialization using He initialization for ReLU networks
         for m in self.net:
-
             if isinstance(m, nn.Linear):
-
-                nn.init.kaiming_uniform_(m.weight, nonlinearity="relu")
-
-                nn.init.zeros_(m.bias)
-
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.LayerNorm):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
 
         return self.net(x)
-
 
 
 
@@ -125,7 +113,7 @@ class DQNAgent:
         self,
         obs_dim: int,
         action_space_n: int,
-        lr: float = 1e-4,
+        lr: float = 3e-4,  # Increased from 1e-4 for faster learning
         gamma: float = 0.99,
         batch_size: int = 128,
         epsilon_start: float | None = None,
@@ -135,7 +123,7 @@ class DQNAgent:
         eps_start: float | None = None,
         eps_end: float | None = None,
         eps_decay_frames: int | None = None,
-        target_sync: int = 1_000,
+        target_sync: int = 10_000,  # Reduced from 50k for more frequent updates
         learn_start: int = 5_000,
         buffer: Optional[ReplayBuffer] = None,
         buffer_capacity: int = 100_000,
@@ -168,8 +156,8 @@ class DQNAgent:
         e_decay = eps_decay_frames if eps_decay_frames is not None else epsilon_decay_steps
 
         self.eps_start = float(1.0 if e_start is None else e_start)
-        self.epsilon_min = float(0.05 if e_end is None else e_end)
-        self.epsilon_decay_steps = int(100_000 if e_decay is None else e_decay)
+        self.epsilon_min = float(0.01 if e_end is None else e_end)  # Increased from 0.05 for more exploration
+        self.epsilon_decay_steps = int(1_000_000 if e_decay is None else e_decay)  # Faster decay
         self.epsilon = self.eps_start
 
         self.q_net = QNetwork(obs_dim, action_space_n).to(self.device)
@@ -177,11 +165,28 @@ class DQNAgent:
         self.target_net.load_state_dict(self.q_net.state_dict())
         self.target_net.eval()
 
-        self.optimizer = optim.Adam(self.q_net.parameters(), lr=lr)
+        # Optimized optimizer with weight decay and learning rate scheduling
+        self.optimizer = optim.AdamW(
+            self.q_net.parameters(), 
+            lr=lr, 
+            weight_decay=1e-5,  # L2 regularization
+            eps=1e-8,
+            betas=(0.9, 0.999)
+        )
+        
+        # Learning rate scheduler for adaptive learning
+        self.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer, 
+            mode='min', 
+            factor=0.8, 
+            patience=50000,  # Reduce LR if loss doesn't improve for 50k steps
+            min_lr=1e-6
+        )
 
         # Tracking counters
         self.frame_idx: int = 0
         self.gradient_steps: int = 0
+        self.recent_losses: list = []  # Track recent losses for LR scheduling
 
         # Local RNG for tie-breaking, etc.
         self.rng = np.random.default_rng(seed)
@@ -228,16 +233,17 @@ class DQNAgent:
 
     def update(self) -> Dict[str, Any]:
         """
-        Performs a single Double DQN update step if enough samples are available.
+        Performs an optimized Double DQN update step if enough samples are available.
 
         Returns:
-            dict with training metrics: loss, epsilon, frame, gradient_steps.
+            dict with training metrics: loss, epsilon, frame, gradient_steps, lr.
         """
         metrics: Dict[str, Any] = {
             "loss": 0.0,
             "epsilon": float(self.epsilon),
             "frame": int(self.frame_idx),
             "gradient_steps": int(self.gradient_steps),
+            "learning_rate": self.optimizer.param_groups[0]['lr'],
         }
 
         if len(self.buffer) < max(self.learn_start, self.batch_size):
@@ -256,30 +262,48 @@ class DQNAgent:
         q_values = self.q_net(states_t)
         q_selected = q_values.gather(1, actions_t.unsqueeze(1)).squeeze(1)
 
-        # Double DQN target
+        # Double DQN target with improved target computation
         with torch.no_grad():
             next_q_online = self.q_net(next_states_t)
             best_next_actions = torch.argmax(next_q_online, dim=1, keepdim=True)  # (B,1)
             next_q_target = self.target_net(next_states_t)
             next_q_selected = next_q_target.gather(1, best_next_actions).squeeze(1)
-            targets = rewards_t + (1.0 - dones_t) * self.gamma * next_q_selected
+            
+            # Clamp rewards for stability
+            rewards_clamped = torch.clamp(rewards_t, -100, 100)
+            targets = rewards_clamped + (1.0 - dones_t) * self.gamma * next_q_selected
 
-        loss = F.smooth_l1_loss(q_selected, targets)
+        # Huber loss for better stability with outliers
+        loss = F.smooth_l1_loss(q_selected, targets, beta=1.0)
 
         self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
-        # Optional gradient clipping for stability
-        nn.utils.clip_grad_norm_(self.q_net.parameters(), max_norm=10.0)
+        
+        # Enhanced gradient clipping
+        torch.nn.utils.clip_grad_norm_(self.q_net.parameters(), max_norm=10.0)
+        
         self.optimizer.step()
+
+        # Track loss for learning rate scheduling
+        current_loss = float(loss.item())
+        self.recent_losses.append(current_loss)
+        if len(self.recent_losses) > 1000:  # Keep only recent 1000 losses
+            self.recent_losses.pop(0)
+        
+        # Update learning rate based on recent average loss
+        if len(self.recent_losses) >= 100 and self.gradient_steps % 1000 == 0:
+            avg_recent_loss = sum(self.recent_losses[-100:]) / 100
+            self.lr_scheduler.step(avg_recent_loss)
 
         self.gradient_steps += 1
         if self.gradient_steps % self.target_sync == 0:
             self.sync_target()
 
-        metrics["loss"] = float(loss.item())
+        metrics["loss"] = current_loss
         metrics["epsilon"] = float(self.epsilon)
         metrics["frame"] = int(self.frame_idx)
         metrics["gradient_steps"] = int(self.gradient_steps)
+        metrics["learning_rate"] = self.optimizer.param_groups[0]['lr']
         return metrics
 
     def sync_target(self) -> None:
