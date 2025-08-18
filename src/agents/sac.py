@@ -43,7 +43,7 @@ class Actor(nn.Module):
         action = torch.argmax(action_probs, dim=-1)
 
         # The log_prob is the log_prob of the chosen action
-        log_prob = log_probs.gather(1, action.unsqueeze(1))
+        log_prob = (probs * log_probs).sum(-1, keepdim=True)
 
         return action, log_prob, action_probs
 
@@ -217,9 +217,8 @@ class SACAgent(BaseAgent):
         self.alpha = self.log_alpha.exp().item()
 
         # Soft update target networks
-        with torch.no_grad():
-            for target_param, param in zip(self.critic_target.parameters(), self.critic.parameters()):
-                target_param.data.copy_(self.tau * param.data + (1.0 - self.tau) * target_param.data)
+        for target_param, param in zip(self.critic_target.parameters(), self.critic.parameters()):
+            target_param.data.copy_(self.tau * param.data + (1.0 - self.tau) * target_param.data)
 
         self.gradient_steps += 1
 
