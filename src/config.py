@@ -81,7 +81,7 @@ class Config:
     mallets_per_side: int = 2  # number of mallets each side controls
 
     # Puck initial speed (randomized magnitude range, px per tick)
-    puck_speed_init: Tuple[float, float] = (3.0, 6.0)
+    puck_speed_init: Tuple[float, float] = (2.25, 4.5)
 
     # Episode control
     max_steps: int = 2000
@@ -100,7 +100,7 @@ class Config:
     # Observation normalization
     # Positions typically scaled to [-1, 1] using table size directly.
     # Velocity normalization constants used by env/utils during scaling.
-    vel_norm_puck: float = 5.0  # expected max magnitude for puck velocity (px/tick)
+    vel_norm_puck: float = 3.75  # expected max magnitude for puck velocity (px/tick)
     vel_norm_mallet: float = 9.0  # equals mallet_speed by default
     mirror_right_obs: bool = True  # mirror horizontally for right agent's perspective
 
